@@ -1,4 +1,4 @@
-import { validGroupName, validFlag } from "../src/regexp_tools.mjs";
+import { validGroupName, validFlag, createRegExpGroupEnd, createRegExpGroupStart } from "../src/regexp_tools.mjs";
 import { describe } from "mocha";
 import { expect } from "chai";
 
@@ -38,4 +38,24 @@ describe("RegExp Groups", () => {
       });
     });
   });
+
+  describe("Start of Group", () => {
+    validGroupNames.forEach((groupName, index) => {
+      it(`Valid group "${groupName}" start`, () => {
+        expect(createRegExpGroupStart(groupName)).to.equal(`(?<${groupName}>)`);
+      });
+      it(`Valid group "${groupName}" with ${index} previous group names start`, () => {
+        expect(createRegExpGroupStart(groupName, index)).to.equal(`(?<${groupName}${index?index:""}>)`);
+      });
+    });
+  })
+
+  describe("End of Group", () => {
+    validGroupNames.forEach((groupName, index) => {
+      it(`Valid group "${groupName}" end`, () => {
+        expect(createRegExpGroupEnd(groupName)).to.equal(")");
+        expect(createRegExpGroupEnd(groupName, index)).to.equal(")");
+      });
+    });
+  })
 });
