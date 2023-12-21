@@ -263,7 +263,7 @@ function calculateFlags(initial, resulting, ignoreConflicts = true) {
  * @returns {boolean} True, if and only if the given group name is a valid group name.
  */
 export function validGroupName(groupName) {
-  return /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(groupName);
+  return typeof groupName === "string" && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(groupName);
 }
 
 /**
