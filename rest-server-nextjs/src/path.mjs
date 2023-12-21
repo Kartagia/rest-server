@@ -4,7 +4,6 @@
  */
 
 import { createRegExpGroupStart, createRegExpGroupEnd } from "@/regexp_tools.mjs";
-import { createPathSegmentRegexp, literalOrVariableRegex } from "./path.mjs";
 
 /**
  * The recongized path types.
@@ -45,102 +44,7 @@ export function validPath(path) {
       return false;
   }
 }
-/**
- * A function supplying value of specific type.
- * @template TYPE The supplied value.
- * @callback Supplier
- * @returns {Promise<TYPE>} The promise of the supplied value.
- */
-/**
- * A function supplying an array of specific type.
- * @template TYPE The element type.
- * @typedef {Supplier<TYPE[]>} ArraySupplier
- */
-/**
- * A function supplying a filtered value of specific type.
- * @template TYPE The suppleid type.
- * @callback FilteredByValueSupplier
- * @param {Predicate<TYPE>} filter The filter testing values.
- * @returns {Promise<TYPE[]>} The list of the filtered values.
- */
-/**
- * A function supplying a filtered value of specific type by their
- * associated key.
- * @template KEY The type of the key.
- * @template VALUE The supplied value type.
- * @callback FilteredByKeySupplier
- * @param {Predicate<KEY>} filter The filter testing keys.
- * @returns {Promise<VALUE[]>} The list of the filtered values.
- */
-/**
- * The function determining the value of a key.
- * @template KEY The key type.
- * @template VALUE the value type.
- * @callback RetrieveFunction
- * @param {KEY} key The key of the queried value..
- * @return {Promise<VALUE>} The promise of a value associated with key.
- * @throws {UnsupportedError} The rejection error in case that the
- * value function is not supported.
- * @throws {AccessError} The rejection error in case the value access is prohibted.
- */
-/**
- * The function adding a new entry to the data source.
- * @template KEY The key type.
- * @template VALUE the value type.
- * @callback CreateFunction
- * @param {VALUE} value The new value.
- * @returns {Promise<KEY>} The key associated with the new value.
- * @throws {UnsupportedError} The rejection error in case tha the data source
- * does not allow new values.
- * @throws {TypeError} The reejction error in case the given value was rejected.
- * @throws {AccessError} The rejection error in case the given new value is prohibited
- * for the current user.
- */
-/**
- * The function updating an existing entry.
- * @template KEY The key type.
- * @template VALUE the value type.
- * @callback UpdateFunction
- * @param {KEY} key the key of the updated value.
- * @param {VALUE} value The new value.
- * @returns {Promise<boolean>} The promise of the completion.
- * @throws {UnsupportedError} The rejection error in case tha the data source
- * does not allow new values.
- * @throws {TypeError} The rejection error in case the given value was rejected.
- * @throws {AccessError} The rejection error in case the given update is prohibited.
- */
-/**
- * The function removing an existing entry from a data source.
- * @template KEY The key type.
- * @callback DeleteFunction
- * @param {KEY} key The removed key.
- * @returns {Promise<boolean>} The promise of the successful operation.
- * @throws {UnsupportedError} The rejection error in case tha the data source
- * does not support removal of the values.
- * @throws {AccessError} The reejction error in case the given key cannot be removed.
- */
-/**
- * The viable data types for paths.
- * @typedef {string} PathTypes
- */
-/**
- * The data source to acquire entries.
- * @template Key The kay type.
- * @template Value The value type.
- * @typedef {Object} IDataSource
- * @property {PathTypes} path The path of the data source including params.
- * @property {RetrieveFunction<Key,Value>} retrieve The function returning the value of key.
- * @property {CreateFunction<Key,Value>} create The function returning the a new key associated
- * to a new value stored into the source.
- * @property {UpdateFunction<Key,Value>} update The function updating an existing data entry.
- * @property {DeleteFunction<Key>} remove The function removing an existing data entry.
- * @property {ArraySupplier<Key>} keys The function returning the keys of the data source.
- * @property {FilteredByKeySupplier<Value>} filterByKey The function returing the values
- * with key accepted by the key filter.
- * @property {FilteredByValueSupplier<Value>} filterByValue THe function returning the
- * valeus acceptedb y the value filter.
- * @property {RetrieveFunction<Value,Key>} keyOfValue The function returning the key of value.
- */
+
 /**
  * A log entry.
  * @typedef {Object} LogEntry
