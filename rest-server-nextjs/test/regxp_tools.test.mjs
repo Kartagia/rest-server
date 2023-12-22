@@ -1,4 +1,9 @@
-import { validGroupName, validFlag, createRegExpGroupEnd, createRegExpGroupStart } from "../src/regexp_tools.mjs";
+import {
+  validGroupName,
+  validFlag,
+  createRegExpGroupEnd,
+  createRegExpGroupStart,
+} from "../src/regexp_tools.mjs";
 import { describe } from "mocha";
 import { expect } from "chai";
 
@@ -42,13 +47,21 @@ describe("RegExp Groups", () => {
   describe("Start of Group", () => {
     validGroupNames.forEach((groupName, index) => {
       it(`Valid group "${groupName}" start`, () => {
-        expect(createRegExpGroupStart(groupName)).to.equal(`(?<${groupName}>)`);
+        expect(createRegExpGroupStart(groupName)).to.equal(`(?<${groupName}>`);
       });
       it(`Valid group "${groupName}" with ${index} previous group names start`, () => {
-        expect(createRegExpGroupStart(groupName, index)).to.equal(`(?<${groupName}${index?index:""}>)`);
+        expect(createRegExpGroupStart(groupName, index)).to.equal(
+          `(?<${groupName}${index ? index : ""}>`
+        );
       });
     });
-  })
+    it(`Start of a character class`, () => {
+      expect(createRegExpGroupStart("[")).to.equal("[");
+    });
+    it(`Start of a character class with index 5`, () => {
+      expect(createRegExpGroupStart("[", 5)).to.equal("[");
+    });
+  });
 
   describe("End of Group", () => {
     validGroupNames.forEach((groupName, index) => {
@@ -57,5 +70,11 @@ describe("RegExp Groups", () => {
         expect(createRegExpGroupEnd(groupName, index)).to.equal(")");
       });
     });
-  })
+    it(`A character class`, () => {
+      expect(createRegExpGroupEnd("[")).to.equal("]");
+    });
+    it(`A character class with index 5`, () => {
+      expect(createRegExpGroupEnd("[", 5)).to.equal("]");
+    });
+  });
 });
