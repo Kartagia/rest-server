@@ -554,7 +554,10 @@ export default class RegExpBuilder {
  * @throws {RangeError} The group name is invalid.
  */
 export function createRegExpGroupStart(groupName = undefined, groupIndex = 0) {
-  if (groupName != null) {
+  if (groupName === "[") {
+    // Start of a character class group.
+    return "[";
+  } else if (groupName != null) {
     if (validGroupName(groupName)) {
       // Generating the group name with possible index addition.
       return `(?<${groupName}${groupIndex ? groupIndex : ""}>`
