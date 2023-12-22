@@ -557,7 +557,7 @@ export function createRegExpGroupStart(groupName = undefined, groupIndex = 0) {
   if (groupName) {
     if (validGroupName(groupName)) {
       // Generating the group name with possible index addition.
-      return `(?<${groupName}${groupIndex ? groupIndex : ""}>)`
+      return `(?<${groupName}${groupIndex ? groupIndex : ""})`
     } else {
       throw new RangeError("Invalid group name");
     }
