@@ -4,8 +4,8 @@
  * The module implementing data sources.
  */
 
-import { parsePath, validPath } from "@/path.mjs";
-import { UnsupportedError, AccessError } from "@/errors.mjs";
+import { parsePath, validPath } from "./path.mjs";
+import { UnsupportedError, AccessError } from "./errors.mjs";
 
 /**
  * @template RESULT The result type of the promise function.

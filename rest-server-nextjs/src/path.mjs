@@ -3,7 +3,11 @@
  * The module containing path related methods and data types.
  */
 
-import { createRegExpGroupStart, createRegExpGroupEnd } from "@/regexp_tools.mjs";
+import {
+  createRegExpGroupStart,
+  createRegExpGroupEnd,
+  validGroupName,
+} from "./regexp_tools.mjs";
 
 /**
  * The recongized path types.
@@ -85,7 +89,7 @@ const pathParameterNameRegex = new RegExp(
  * @returns {Boolean} True, if and on ly if the tested is a valid parameter name.
  */
 export function validPathParameterName(tested) {
-  return typeof tested === "string" && tested.match(pathParameterNameRegex);
+  return validGroupName(tested);
 }
 /**
  * Create new parameter regex, and update the counter.
@@ -98,7 +102,7 @@ export function validPathParameterName(tested) {
  */
 export function getParameterNameRegexp(parameterName, count, flags = "") {
   if (typeof parameterName !== "string") {
-    throw new TypeError("Invalid parameter name");
+    throw new TypeError("Invalid parameter name: Not a string");
   } else if (parameterName == null || validPathParameterName(parameterName)) {
     return new RegExp(
       parameterNameRegex.source.replace(
@@ -108,26 +112,26 @@ export function getParameterNameRegexp(parameterName, count, flags = "") {
       flags
     );
   } else {
-    throw new RangeError("Invalid parameter name");
+    throw new RangeError("Invalid parameter name " + parameterName);
   }
 }
 /**
  * The regular expression matching to a path parameter.
  * - The regular expression will capture the name of the placeholder
- * into named group "param".
+ * into named group "param", "optParams", or "params".
  */
-const parameterRegex = new RegExp(
+const pathParameterRegex = new RegExp(
   "(?:" +
-    "(?\\[\\[\\.\\.\\." +
-    getParameterNameRegexp("param") +
+    "(?:\\[\\[\\.\\.\\." +
+    getParameterNameRegexp("opt_param").source +
     "\\]\\])" +
     "|" +
-    "(?\\[\\.\\.\\." +
-    getParameterNameRegexp("param") +
+    "(?:\\[\\.\\.\\." +
+    getParameterNameRegexp("all_param").source +
     "\\])" +
     "|" +
     "(?:\\[" +
-    getParameterNameRegexp("param") +
+    getParameterNameRegexp("param").source +
     "\\])" +
     ")",
   "g"
@@ -173,17 +177,32 @@ export function createLiteralRegexp(
  * is ignored if the group name is not a string.
  * @param {string} [flags="y"] The flags fo the created regular expression.
  * @returns {RegExp} The regular expression matching to a parameter placeholder of the segment.
+ * Reserved groups:
+ * - If the group name is a string:
+ *   - groupName: The single parameter match.
+ *   - "opt_" + groupName: The parameter is an optional catch all parameter.
+ *   - "all_" + groupName: The parameter is a catch all parameter. 
+ *   - If the groupIndex is greater than 0 the group index is appended to the group
+ *     names.
  */
 export function createParameterRegexp(
   groupName = undefined,
   groupIndex = null,
   flags = "y"
 ) {
+  const optGroupName = groupName != null ? `opt_${groupName}` : groupName;
+  const listGroupName = groupName != null ? `all_${groupName}` : groupName;
   return new RegExp(
-    parameterRegex.source.replaceAll(
-      "(?<param>",
-      createRegExpGroupStart(groupName, groupIndex)
-    ),
+    pathParameterRegex.source
+      .replaceAll("(?<param>", createRegExpGroupStart(groupName, groupIndex))
+      .replaceAll(
+        "(?<opt_param>",
+        createRegExpGroupStart(optGroupName, groupIndex)
+      )
+      .replaceAll(
+        "(?<all_param>",
+        createRegExpGroupStart(listGroupName, groupIndex)
+      ),
     flags
   );
 }
@@ -335,7 +354,7 @@ const pathSegmentCharacterRegex = RegExp(
     "(?:[a-zA-Z0-9~._\\-])" + // Unescaped character.
     "|" +
     "(?:%[a-fA-F0-9]{2})" + // Query escape sequence.
-    createREgExpGroupEnd(undefined),
+    createRegExpGroupEnd(undefined),
   ""
 );
 
@@ -376,7 +395,8 @@ export function createQueryValueRegexp(
       "(?:[a-zA-Z0-9~._\\-])" + // Unescaped character.
       "|" +
       "(?:%[a-fA-F0-9]{2})" + // Query escape sequence.
-      ")*",
+      ")*" + 
+      createRegExpGroupEnd(groupName, groupIndex),
     flags
   );
 }
