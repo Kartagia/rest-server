@@ -156,7 +156,6 @@ export function removeFlag(flags, removedFlags) {
       if (result) {
         return result;
       } else {
-        console.debug(`%DEBUG%: Invalid flag "${flag}" at ${flagIndex}`);
         return result;
       }
     })
@@ -196,7 +195,6 @@ export function removeFlag(flags, removedFlags) {
           const resultFlag = `${result.substring(0, index)}${result.substring(
             index + flag.length
           )}`;
-          console.debug(`Removing existing flag "${flag}" from index ${index}`);
           return resultFlag;
         } else {
           return result;
