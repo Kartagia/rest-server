@@ -1,10 +1,12 @@
 import {
+  hasFlag,
   addFlag,
   removeFlag,
   validGroupName,
   validFlag,
   createRegExpGroupEnd,
   createRegExpGroupStart,
+  getSafeFlags,
 } from "../src/regexp_tools.mjs";
 import { describe } from "mocha";
 import { expect } from "chai";
@@ -29,31 +31,49 @@ describe("Flags", () => {
     const allFlags = "dgimsuvy";
     allFlags.split("").forEach((flag) => {
       it(`Adding flag "${flag}" to "${flag}"`, () => {
-        expect(addFlag(flag, flag)).to.not.throw();
+        expect(() => {
+          addFlag(flag, flag);
+        }).to.not.throw();
         expect(addFlag(flag, flag)).to.equal(flag);
       });
       it(`Adding flag "${flag}" to ""`, () => {
-        expect(addFlag("", flag)).to.not.throw();
+        expect(() => {
+          addFlag("", flag);
+        }).to.not.throw();
         expect(addFlag("", flag)).to.equal(flag);
-      })
+      });
     });
 
     it("Global added to non-lenient sticky", () => {
-      expect(addFlag("y", "g", false)).to.throw();
+      expect(() => {
+        addFlag("y", "g", false);
+      }).to.throw();
     });
     it("Invalid combination unicode added to unicode sets", () => {
-      expect(addFlag("v", "u")).to.throw();
+      expect(() => {
+        addFlag("v", "u", false);
+      }).to.throw();
     });
     it("Invalid combination unicode sets added to unicode", () => {
-      expect(addFlag("u", "v")).to.throw();
+      expect(() => {
+        addFlag("u", "v");
+      }).to.throw();
     });
   });
   describe("Remove flag", () => {
     const allFlags = "dgimsuvy";
     allFlags.split("").forEach((flag) => {
       it(`Removing flag "${flag}" from "${flag}"`, () => {
-        expect(removeFlag(flag, flag)).to.not.throw();
-        expect(removeFlag(flag, flag)).to.equal("");
+        if (hasFlag(getSafeFlags(), flag)) {
+          expect(() => {
+            removeFlag(flag, flag);
+          }).to.not.throw();
+          expect(removeFlag(flag, flag)).to.equal("");
+        } else {
+          expect( () => {
+            removeFlag(flag, flag);
+          }).to.throw();
+        }
       });
     });
   });
