@@ -33,12 +33,16 @@ const capturingGroupRegexp = new RegExp(
  * @param {string} [flags=""] The flags of the created regular expression.
  * @returns {RegExp} The regular expression matching to the first start of the group.
  */
-export function createNamedCapturingGroupStartRegexp(groupName=undefined, groupIndex=0, flags="") {
+export function createNamedCapturingGroupStartRegexp(
+  groupName = undefined,
+  groupIndex = 0,
+  flags = ""
+) {
   return new RegExp(
     capturingGroupRegexp.source.replace(
       "(?:<groupName>",
       createRegExpGroupStart(groupName, groupIndex).source
-    ), 
+    ),
     flags
   );
 }
@@ -75,6 +79,22 @@ const allFlags = "dgimsuvy";
  * Non-conflicting flags.
  */
 const safeFlags = "dims";
+
+/**
+ * Get all flags.
+ * @returns {string} The string containing all flags.
+ */
+export function getAllFlags() {
+  return "".concat(allFlags);
+}
+
+/**
+ * Get safe flags.
+ * @returns {string} The string containing safe flags.
+ */
+export function getSafeFlags() {
+  return "".concat(safeFlags);
+}
 
 /**
  * Test validity of a flag.
@@ -130,12 +150,21 @@ export function alterFlags(flags, addedFlags = "", removedFlags = "") {
 export function removeFlag(flags, removedFlags) {
   if (typeof flags !== "string") {
     throw new TypeError("Invalid flags");
-  } else if (flags.split("").every(validFlag)) {
-    throw new RangeError("Invalid flags", {
+  } else if (
+    !flags.split("").every((flag, flagIndex) => {
+      const result = validFlag(flag);
+      if (result) {
+        return result;
+      } else {
+        return result;
+      }
+    })
+  ) {
+    throw new RangeError("Invalid flags:" + flags, {
       cause: new RangeError("Invalid flag"),
     });
-  } else if (typeof addedFlags !== "string") {
-    throw new TypeError("Invalid added flags");
+  } else if (typeof removedFlags !== "string") {
+    throw new TypeError("Invalid removed flags");
   }
   return removedFlags.split("").reduce((result, flag, index) => {
     if (!validFlag(flag)) {
@@ -143,24 +172,35 @@ export function removeFlag(flags, removedFlags) {
     }
     switch (flag) {
       case "u":
-        throw new SyntaxError(
-          "Cannot remove unicode without breaking the regular expression"
-        );
+        if (hasFlag(result, flag)) {
+          throw new SyntaxError(
+            "Cannot remove unicode sets without breaking the regular expression"
+          );
+        } else {
+          return result;
+        }
       case "v":
         // Unicode and unicode sets flag cannot be removed without breaking the
         // regular expression.
-        throw new SyntaxError(
-          "Cannot remove unicode sets without breaking the regular expression"
-        );
+        if (hasFlag(result, flag)) {
+          throw new SyntaxError(
+            "Cannot remove unicode sets without breaking the regular expression"
+          );
+        } else {
+          return result;
+        }
       default:
         if (hasFlag(result, flag)) {
           const index = result.indexOf(flag);
-          return `${result.substring(0, index)}${result.substring(index + 1)}`;
+          const resultFlag = `${result.substring(0, index)}${result.substring(
+            index + flag.length
+          )}`;
+          return resultFlag;
         } else {
           return result;
         }
     }
-  }, "");
+  }, flags);
 }
 
 /**
@@ -175,35 +215,43 @@ export function removeFlag(flags, removedFlags) {
 export function addFlag(flags, addedFlags) {
   if (typeof flags !== "string") {
     throw new TypeError("Invalid flags");
-  } else if (flags.split("").every(validFlag)) {
+  } else if (flags.length && !flags.split("").every(validFlag)) {
     throw new RangeError("Invalid flags", {
-      cause: new RangeError("Invalid flag"),
+      cause: new RangeError(`Invalid flag ${flags}`),
     });
   } else if (typeof addedFlags !== "string") {
     throw new TypeError("Invalid added flags");
   }
   // Getting the result flags.
-  return addedFlags.split("").reduce((result, flag, index) => {
-    if (!validFlag(flag)) {
-      throw new RangeError(`Invalid flag "${flag}" at index ${index}`);
-    }
-    switch (flag) {
-      case "u":
-        if (hasFlag(flags, "v")) {
-          throw new SyntaxError("Unicode sets is not compatible with unicode");
-        } else {
+  if (addedFlags.length == 0) {
+    return flags;
+  } else {
+    return addedFlags.split("").reduce((result, flag, index) => {
+      if (!validFlag(flag)) {
+        throw new RangeError(`Invalid flag "${flag}" at index ${index}`);
+      }
+      switch (flag) {
+        case "u":
+          if (hasFlag(flags, "v")) {
+            throw new SyntaxError(
+              "Unicode sets is not compatible with unicode"
+            );
+          } else {
+            return hasFlag(result, flag) ? result : result.concat(flag);
+          }
+        case "v":
+          if (hasFlag(flags, "u")) {
+            throw new SyntaxError(
+              "Unicode is not compatible with Unicode sets"
+            );
+          } else {
+            return hasFlag(result, flag) ? result : result.concat(flag);
+          }
+        default:
           return hasFlag(result, flag) ? result : result.concat(flag);
-        }
-      case "v":
-        if (hasFlag(flags, "u")) {
-          throw new SyntaxError("Unicode is not compatible with Unicode sets");
-        } else {
-          return hasFlag(result, flag) ? result : result.concat(flag);
-        }
-      default:
-        return hasFlag(result, flag) ? result : result.concat(flag);
-    }
-  }, flags);
+      }
+    }, flags);
+  }
 }
 
 /**
@@ -263,7 +311,9 @@ function calculateFlags(initial, resulting, ignoreConflicts = true) {
  * @returns {boolean} True, if and only if the given group name is a valid group name.
  */
 export function validGroupName(groupName) {
-  return typeof groupName === "string" && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(groupName);
+  return (
+    typeof groupName === "string" && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(groupName)
+  );
 }
 
 /**
@@ -560,7 +610,7 @@ export function createRegExpGroupStart(groupName = undefined, groupIndex = 0) {
   } else if (groupName != null) {
     if (validGroupName(groupName)) {
       // Generating the group name with possible index addition.
-      return `(?<${groupName}${groupIndex ? groupIndex : ""}>`
+      return `(?<${groupName}${groupIndex ? groupIndex : ""}>`;
     } else {
       throw new RangeError("Invalid group name");
     }
