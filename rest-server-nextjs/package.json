@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "SET NODE_ENV='TEST' && mocha --harmonize"
   },
   "dependencies": {
     "next": "14.0.4",
@@ -15,7 +16,9 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "chai": "^4.3.10",
     "eslint": "^8",
-    "eslint-config-next": "14.0.4"
+    "eslint-config-next": "14.0.4",
+    "mocha": "^10.2.0"
   }
 }

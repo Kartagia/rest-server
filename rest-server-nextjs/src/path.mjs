@@ -3,15 +3,36 @@
  * The module containing path related methods and data types.
  */
 
+import { UnsupportedError } from "./errors.mjs";
 import {
+  addFlag,
   createRegExpGroupStart,
   createRegExpGroupEnd,
   validGroupName,
 } from "./regexp_tools.mjs";
 
 /**
+ * Create escaped regular expression source.
+ * @param {string} literal The literal regular expression to escape.
+ * @returns {string} The regular expression source producing the literal
+ * string.
+ */
+export function escapeRegExp(literal) {
+  return literal.replaceAll(/(?<escaped>[.\[\(\)\+?*\-\\/\]])/g, "\\$<escaped>");
+}
+
+/**
+ * The service path type.
+ * @typedef {Object} ServicePath
+ * @property {boolean} absolute Is the path absolute or relative.
+ * @property {PathSegmentTypes[]} segments The segments of the path.
+ * @property {Map<string, string>} parameters The mappign from segment
+ * parameters to their values.
+ */
+
+/**
  * The recongized path types.
- * @typedef {string} PathTypes
+ * @typedef {string|ServicePath} PathTypes
  */
 
 /**
@@ -181,7 +202,7 @@ export function createLiteralRegexp(
  * - If the group name is a string:
  *   - groupName: The single parameter match.
  *   - "opt_" + groupName: The parameter is an optional catch all parameter.
- *   - "all_" + groupName: The parameter is a catch all parameter. 
+ *   - "all_" + groupName: The parameter is a catch all parameter.
  *   - If the groupIndex is greater than 0 the group index is appended to the group
  *     names.
  */
@@ -275,6 +296,7 @@ const pathSegmentRegex = new RegExp(
  * - Reserved groups:
  *   - "absolute": Defined, if the path segment is an absolute path segment.
  *   - "segment": The last matchign segment content without initial or following separator.
+ *   - "delimiter": The end delimiter.
  */
 export function createPathSegmentRegexp(
   groupName = undefined,
@@ -288,7 +310,7 @@ export function createPathSegmentRegexp(
         "(?<segment>",
         createRegExpGroupStart(groupName, groupIndex)
       ) +
-      "(?:\\/|$)" +
+      "(?<delimiter>\\/|$)" +
       ")",
     flags
   );
@@ -305,22 +327,341 @@ export const pathRegex = new RegExp(
 );
 
 /**
+ * The function determining the path parameter value.
+ * @template [TYPE=string] The parameter value type.
+ * @callback PathParamValueFunction
+ * @param {RegExpExecArray} match The regular expression execution result.
+ * @returns {TYPE|undefined} The path parameter value, if it exists in the match,
+ * or an undefined value.
+ */
+
+/**
+ * The parameter types of the path parameters.
+ * @typedef {"optional"|"catchall"|"parameter"} PathParameterTypes
+ */
+
+/**
+ * The path parameter definition.
+ * @template [TYPE=string] The parameter value type.
+ * @typedef {Object} PathParameter
+ * @property {PathParameterTypes} type The type of the path parameter.
+ * @property {PathParamValueFunction<TYPE>} value The function determining
+ * the value of the path parameter from the path regular expression execution
+ * results.
+ */
+
+/**
+ * Create a simple parameter value function returning the parameter value string.
+ * @param {string} paramName The parameter name.
+ * @returns {PathParamValueFunction<string>} The function returning the parameter value.
+ */
+export function createSimplePathParamValueFunction(paramName) {
+  return createPathParamValueFunction(
+    paramName,
+    (/** @type {string} */ str) => str
+  );
+}
+
+/**
+ * Create path parameter value function.
+ * @template [TYPE=string]
+ * @param {string} paramName The parameter name.
+ * @param {Parser<TYPE>} paramParser The parser parsing the value to the default value.
+ * @returns {PathParamValueFunction<TYPE>} The function
+ */
+export function createPathParamValueFunction(paramName, paramParser) {
+  return (/** @type {RegExpExecArray?} */ match) => {
+    if (match instanceof Array && match.groups && match.groups[paramName]) {
+      // We do have execution array.
+      return paramParser(match.groups[paramName]);
+    } else {
+      // Match
+      return undefined;
+    }
+  };
+}
+
+/**
+ * @typedef {string} PathLiteralSegment The literal segment of the path.
+ */
+
+/**
+ * @template [TYPE=string]
+ * @callback Parser
+ * @param {string} source The parsed string.
+ * @returns {TYPE} The parsed value.
+ * @throws {SyntaxError} The parse failed due invalid source.
+ * @description
+ * Converts a string into a value. If the source is not a valid
+ * string representation of the type, throws an exception.
+ */
+
+/**
+ * @template [TYPE=string]
+ * @callback Stringifier
+ * @param {TYPE} value The converted value.
+ * @returns {string} The string representing the value in the URL.
+ * @description Converts value into the URL representation of the value.
+ */
+
+/**
+ * A path parameter segment represents a segment only containing a parameter value.
+ * @template [TYPE=string] The type of the parameter value.
+ * @typedef {Object} PathParameterSegment The segment containing path parameter.
+ * @property {string} paramName The name of the parameter.
+ * @property {PathParameterTypes} type The type of the parameter.
+ * @property {Parser<TYPE>} parser The parser parsing the value of the parameter.
+ * @property {Stringifier<TYPE>} toString The function converting the path parameter
+ * value to the string sequence in the url.
+ */
+
+/**
+ * A mixed parameter segment contains both parameter and literal segmetns.
+ * @typedef {Array<PathLiteralSegment|PathParameterSegment<any>>} PathMixedSegment
+ */
+
+/**
+ * The segment types of the path segments.
+ * @typedef {PathLiteralSegment|PathParameterSegment|PathMixedSegment} PathSegmentTypes
+ */
+
+/**
+ * Create a path.
+ * @param {PathSegmentTypes[]} segments... The path segments.
+ * @returns {ServicePath} The service path of the given segments.
+ * @throws {SyntaxError} Any segment was invalid.
+ */
+export function createPath(...segments) {
+  const result = {
+    segments: [...segments],
+    regex: undefined,
+    parameters: /** @type {Object.<string, PathParameter<any>>} */ {},
+  };
+  let flags = "y";
+  let regExpString = "";
+  segments.forEach((segment, index) => {
+    regExpString = regExpString.concat("\\/");
+    if (typeof segment === "string" || segment instanceof String) {
+      regExpString = regExpString.concat(escapeRegExp("" + segment));
+    } else if (segment instanceof Object) {
+      if (segment instanceof Array) {
+        // We do have a mixed segment.
+        regExpString = regExpString.concat(
+          segment
+            .map(
+              (
+                /** @template TYPE @type {PathParameterSegment<TYPE>} */ segmentPart
+              ) => {
+                if (segmentPart.constructor === String) {
+                  return escapeRegExp("" + segmentPart);
+                } else if (result.parameters[segmentPart.paramName]) {
+                  // Test if the parameter type is invalid.
+                  if (
+                    result.parameters[segmentPart.paramName].type !==
+                    segmentPart.type
+                  ) {
+                    // Invalid segment - duplicate parameter name with different type.
+                    throw new SyntaxError("Invalid path", {
+                      cause: new RangeError(
+                        `Duplicate parameter ${segmentPart.paramName} at index ${index}`
+                      ),
+                    });
+                  }
+                  // The parameter exists.
+                  return `\\k<${segmentPart.paramName}>`;
+                } else {
+                  result.parameters[segmentPart.paramName] =
+                    createPathParamValueFunction(
+                      segmentPart.paramName,
+                      segmentPart.parser
+                    );
+                  return `(?<${segmentPart.paramName}>[^\\/]+?)`;
+                }
+              }
+            )
+            .join("")
+        );
+      } else if (
+        segment.type &&
+        segment.type.constructor === String &&
+        typeof segment.paramName === "string" &&
+        segment.parser instanceof Function
+      ) {
+        // Single path.
+        if (result.parameters[segment.paramName]) {
+          // Test if the parameter type is invalid.
+          if (result.parameters[segment.paramName].type !== segment.type) {
+            // Invalid segment - duplicate parameter name with different type.
+            throw new SyntaxError("Invalid path", {
+              cause: new RangeError(
+                `Duplicate parameter ${segment.paramName} at index ${index}`
+              ),
+            });
+          }
+          // The parameter exists.
+          regExpString = regExpString.concat(`\\k<${segment.paramName}>`);
+        } else {
+          result.parameters[segment.paramName] = createPathParamValueFunction(
+            segment.paramName,
+            segment.parser
+          );
+          regExpString = regExpString.concat(`(?<${segment.paramName}>[^\\/]+?)`);
+        }
+      } else {
+        // Invalid element.
+        console.table(segment);
+        throw new SyntaxError("Invalid segments", {
+          cause: TypeError(`Invalid segment at ${index}`),
+        });
+      }
+    } else {
+      throw new SyntaxError("Invalid path", {
+        cause: new TypeError(`Invalid segment at index${index}`),
+      });
+    }
+  });
+
+  try {
+    result.regex = new RegExp(regExpString, addFlag(flags, "y"));
+  } catch (error) {
+    throw new SyntaxError("Invalid path", {
+      cause: new SyntaxError("Invalid path regular expression", {
+        cause: error,
+      }),
+    });
+  }
+  return result;
+}
+
+/**
  * Parse a path into Path object.
  * @param {string} pathString The parsed path string.
- * @returns {Path} The path object representing the given path.
+ * @returns {ServicePath} The path object representing the given path.
  */
 export function parsePath(pathString) {
   if (validPath(pathString)) {
-    const regex = new RegExp(literalOrVariableRegex.source, "fu");
+    const regex = createPathSegmentRegexp("segment");
+    const absolute = pathString.substring(0, 1) === "/";
     const result = {
-      absolute: pathString.substring(0, 1) === "/",
-      segments: pathString.split("/"),
+      absolute,
+      segments: (absolute ? pathString.substring(1) : pathString).split("/"),
       parameters: {},
     };
     result.parameters = result.segments.reduce((params, segment) => {
       let match;
-      while ((match = regex.exec(segment))) {
+      let index = 0;
+      if ((match = regex.exec(segment)) && match.groups.segment == segment) {
+        // Constructing the regular expression matching to the path string and
+        // the parameter definitions for the path.
+        const segmentPartsRegex = createLiteralOrVariableRegex();
+        let paramOrLiteral,
+          partIndex = 0;
+        const segmentRegexp = "";
+        while ((paramOrLiteral = segmentPartsRegex.exec(segment))) {
+          if (paramOrLiteral.groups.literal) {
+            // We have literal.
+            segmentRegexp = segmentRegexp.concat(
+              escapeRegExp(paramOrLiteral.groups.literal)
+            );
+          } else if (paramOrLiteral.groups.opt_param) {
+            // OPtional capture all.
+            throw new SyntaxError(
+              `Invalid path segment at index ${partIndex}`,
+              new UnsupportedError(
+                "Optional catch-all parameters are not supported"
+              )
+            );
+            // Zero or more parameter segments.
+            const paramName = paramOrLiteral.groups.opt_param;
+            if (result.parameters[paramName]) {
+              // Duplicate value
+              if (result.parameters[paramName] !== "optional") {
+                throw new SyntaxError("Invalid path", {
+                  cause: SyntaxError(
+                    `Duplicate parameter name ${paramName} at segment ${partIndex}`
+                  ),
+                });
+              } else {
+                // Adding link to previous segment requiring same sequence.
+              }
+            } else {
+              // Adding new parameter.
+              segmentRegexp = segmentRegexp.concat(
+                `(?<${paramName}>(?:[^\\/]+(?:\\/|$))*?)`
+              );
+              result.parameters[paramName] = {
+                type: "optional",
+                value: (match) =>
+                  match.groups[paramName]
+                    ? match.groups[paramName]
+                        .split("/")
+                        .filter((part) => part.length)
+                    : [],
+              };
+            }
+          } else if (paramOrLiteral.groups.all_param) {
+            // CatchAll parameter segment.
+            throw new SyntaxError(
+              `Invalid path segment at index ${partIndex}`,
+              new UnsupportedError("Catch-all parameters are not supported")
+            );
+
+            // One o rmore parameter segments.
+            const paramName = paramOrLiteral.groups.all_param;
+            segmentRegexp = segmentRegexp.concat(
+              `(?<${paramName}>(?:${
+                partIndex == 0 ? "^" : "\\/"
+              })[^\\/]+(?=\\/|$))*?)`
+            );
+            result.parameters[paramName] = {
+              type: "catchall",
+              value: (match) =>
+                match.groups[paramName]
+                  .split("/")
+                  .filter((part) => part.length),
+            };
+          } else {
+            // We have a single parameter.
+            const type = "parameter";
+            const paramName = paramOrLiteral.groups.param;
+            if (result.parameters[paramName]) {
+              if (result.parameters[paramName].type !== type) {
+                // The path is invalid.
+                throw new SyntaxError(`Invalid path`, {
+                  cause: new SyntaxError(
+                    `Duplicate parameter name ${paramName} at segment ${partIndex}`
+                  ),
+                });
+              } else {
+                // Adding back reference to the existing parameter value
+                // (the default expects same parameter value stays constants)
+                segmentRegexp = segmentRegexp.concat(`\\k<${paramName}>`);
+              }
+            } else {
+              // Adding new parameter definition.
+              segmentRegexp = segmentRegexp.concat(
+                `(?<${paramName}>(?:${partIndex == 0 ? "^" : "\\/"})[^\\/]+?)`
+              );
+              result.parameters[paramName] = {
+                type,
+                value: (match) => match.groups[paramName],
+              };
+            }
+          }
+          partIndex++;
+        }
+        result.regexp = segmentRegexp;
+
         if (match.groups.variable) {
+          const delimiter = match.groups.delimiter;
+          if (delimiter) {
+            // The delimtier is invalid - the segment should not have dash.
+            throw SyntaxError(`Invalid path segment`, {
+              cause: new SyntaxError(
+                `Invalid delimiter ${delimiter} at segment ${index}`
+              ),
+            });
+          }
           const varName = match.groups.variable;
           const typeDef = match.groups.typeDef
             ? {
@@ -338,6 +679,10 @@ export function parsePath(pathString) {
             params[varName] = typeDef;
           }
         }
+        index++;
+      } else {
+        // Invalid segment.
+        throw new SyntaxError(`Invalid segment at index ${index}`);
       }
     }, {});
   } else {
@@ -395,7 +740,7 @@ export function createQueryValueRegexp(
       "(?:[a-zA-Z0-9~._\\-])" + // Unescaped character.
       "|" +
       "(?:%[a-fA-F0-9]{2})" + // Query escape sequence.
-      ")*" + 
+      ")*" +
       createRegExpGroupEnd(groupName, groupIndex),
     flags
   );
