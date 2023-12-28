@@ -41,7 +41,15 @@ describe("Unit Test of Path", () => {
       expect(result.parameters).to.be.empty;
       expect(result.regex.source).to.equal(
         escapeRegExp("/" + segments.join("/"))
-      );
+        + "(?=\\/|$)"
+        );
+
+      const testPath = "/test/rest";
+      let match;
+      expect(() => {match = result.regex.exec(testPath)}).not.throw();
+      expect(match).not.null;
+      expect(match.index).to.equal(0);
+      expect(match[0]).to.equal(testPath);
     });
     it("Literal path /testrest", () => {
       const segments = ["test", "rest"];
@@ -50,7 +58,15 @@ describe("Unit Test of Path", () => {
       expect(result.parameters).to.be.empty;
       expect(result.regex?.source).to.equal(
         escapeRegExp("/" + segments.join(""))
-      );
+        + "(?=\\/|$)"
+        );
+
+      const testPath = "/testrest";
+      let match;
+      expect(() => {match = result.regex.exec(testPath)}).not.throw();
+      expect(match).not.null;
+      expect(match.index).to.equal(0);
+      expect(match[0]).to.equal(testPath);
     });
     it("Parameter path /test/[param]", () => {
       const segments = [
@@ -78,7 +94,17 @@ describe("Unit Test of Path", () => {
       expect(result.regex?.source).to.equal(
         escapeRegExp("/" + segments[0] + "/") +
           `(?<${segments[1].paramName}>[^\\\/]+?)`
+          + "(?=\\/|$)"
       );
+
+      const testPath = "/test/rest";
+      let match;
+      expect(() => {match = result.regex.exec(testPath)}).not.throw();
+      expect(match).not.null;
+      expect(match.index).to.equal(0);
+      expect(match[0]).to.equal(testPath);
+      expect(result.parameters[segments[1].paramName].value(match)).to.equal("rest");
+
     });
 
     it("Parameter path /test/[eventId]/generate/[eventId]", () => {
@@ -113,8 +139,10 @@ describe("Unit Test of Path", () => {
       );
       expect(result.regex?.source).to.equal(
         escapeRegExp("/" + segments[0] + "/") +
-          `(?<${segments[1].paramName}>[^\\\/]+?)` + 
-          escapeRegExp("/" + segments[2]) + `\\/\\k<${result.segments[3].paramName}>`
+          `(?<${segments[1].paramName}>[^\\\/]+?)` +
+          escapeRegExp("/" + segments[2]) +
+          `\\/\\k<${result.segments[3].paramName}>`
+          + "(?=\\/|$)"
       );
     });
   });
