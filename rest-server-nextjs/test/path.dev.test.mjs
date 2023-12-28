@@ -144,6 +144,14 @@ describe("Unit Test of Path", () => {
           `\\/\\k<${result.segments[3].paramName}>`
           + "(?=\\/|$)"
       );
+
+      const testPath = "/test/rest/generate/rest";
+      let match;
+      expect(() => {match = result.regex.exec(testPath)}).not.throw();
+      expect(match).not.null;
+      expect(match.index).to.equal(0);
+      expect(match[0]).to.equal(testPath);
+      expect(result.parameters[segments[1].paramName].value(match)).to.equal("rest");
     });
   });
 
