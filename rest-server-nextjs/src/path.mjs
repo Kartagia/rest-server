@@ -536,7 +536,7 @@ export function createPath(...segments) {
   });
 
   try {
-    result.regex = new RegExp(regExpString, addFlag(flags, "y"));
+    result.regex = new RegExp(regExpString + "(?=\\/|$)", addFlag(flags, "y"));
   } catch (error) {
     throw new SyntaxError("Invalid path", {
       cause: new SyntaxError("Invalid path regular expression", {
