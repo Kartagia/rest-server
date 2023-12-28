@@ -18,7 +18,10 @@ import {
  * string.
  */
 export function escapeRegExp(literal) {
-  return literal.replaceAll(/(?<escaped>[.\[\(\)\+?*\-\\/\]])/g, "\\$<escaped>");
+  return literal.replaceAll(
+    /(?<escaped>[.\[\(\)\+?*\-\\/\]])/g,
+    "\\$<escaped>"
+  );
 }
 
 /**
@@ -470,11 +473,13 @@ export function createPath(...segments) {
                   // The parameter exists.
                   return `\\k<${segmentPart.paramName}>`;
                 } else {
-                  result.parameters[segmentPart.paramName] =
-                    createPathParamValueFunction(
+                  result.parameters[segmentPart.paramName] = {
+                    type: segmentPart.type,
+                    value: createPathParamValueFunction(
                       segmentPart.paramName,
                       segmentPart.parser
-                    );
+                    ),
+                  };
                   return `(?<${segmentPart.paramName}>[^\\/]+?)`;
                 }
               }
@@ -492,20 +497,29 @@ export function createPath(...segments) {
           // Test if the parameter type is invalid.
           if (result.parameters[segment.paramName].type !== segment.type) {
             // Invalid segment - duplicate parameter name with different type.
+            const msg = `Duplicate parameter ${
+              segment.paramName
+            } at index ${index} with conflicting type ${
+              result.parameters[segment.paramName].type
+            } vs ${segment.type}`;
+            console.debug(msg);
             throw new SyntaxError("Invalid path", {
-              cause: new RangeError(
-                `Duplicate parameter ${segment.paramName} at index ${index}`
-              ),
+              cause: new RangeError(msg),
             });
           }
           // The parameter exists.
           regExpString = regExpString.concat(`\\k<${segment.paramName}>`);
         } else {
-          result.parameters[segment.paramName] = createPathParamValueFunction(
-            segment.paramName,
-            segment.parser
+          result.parameters[segment.paramName] = {
+            type: segment.type,
+            value: createPathParamValueFunction(
+              segment.paramName,
+              segment.parser
+            ),
+          };
+          regExpString = regExpString.concat(
+            `(?<${segment.paramName}>[^\\/]+?)`
           );
-          regExpString = regExpString.concat(`(?<${segment.paramName}>[^\\/]+?)`);
         }
       } else {
         // Invalid element.
