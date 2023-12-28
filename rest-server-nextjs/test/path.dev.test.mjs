@@ -1,6 +1,10 @@
 import { describe } from "mocha";
 import { expect } from "chai";
-import { createPath, createPathParamValueFunction, escapeRegExp } from "../src/path.mjs";
+import {
+  createPath,
+  createPathParamValueFunction,
+  escapeRegExp,
+} from "../src/path.mjs";
 
 describe("escapeLiteral", () => {
   it("Empty string", () => {
@@ -13,7 +17,7 @@ describe("escapeLiteral", () => {
     ["abba", "abba"],
     [".Zoomer", "\\.Zoomer"],
     ["talos.Palos", "talos\\.Palos"],
-    ["(?<never>\\w+)", "\\(\\?<never>\\\\w\\+\\)"]
+    ["(?<never>\\w+)", "\\(\\?<never>\\\\w\\+\\)"],
   ];
   valid.forEach(([tested, expected], index) => {
     it(`Test #${index}: Litearal ${tested}`, () => {
@@ -42,30 +46,75 @@ describe("Unit Test of Path", () => {
     it("Literal path /testrest", () => {
       const segments = ["test", "rest"];
       const result = createPath(segments);
-      expect(result.segments).eql([ segments ]);
+      expect(result.segments).eql([segments]);
       expect(result.parameters).to.be.empty;
       expect(result.regex?.source).to.equal(
         escapeRegExp("/" + segments.join(""))
       );
-    })
+    });
     it("Parameter path /test/[param]", () => {
-      const segments = ["test", { 
-        type: "parameter",
-        paramName: "param", 
-        parser: (str) => (str), 
-        toString: (value) => (escapeRegExp(value)) 
-    }];
+      const segments = [
+        "test",
+        {
+          type: "parameter",
+          paramName: "param",
+          parser: (str) => str,
+          toString: (value) => escapeRegExp(value),
+        },
+      ];
       const result = createPath(...segments);
       const expectedPathParam = {
         type: segments[1].type,
         paramName: segments[1].paramName,
-        value: createPathParamValueFunction(segments[1].paramName, segments[1].parser)
-      }
-      expect(result.segments).eql([ ...segments ]);
-      expect(result.parameters[segments[1].paramName].toString()).eql(
-        expectedPathParam.value.toString());
+        value: createPathParamValueFunction(
+          segments[1].paramName,
+          segments[1].parser
+        ),
+      };
+      expect(result.segments).eql([...segments]);
+      expect(result.parameters[segments[1].paramName].value.toString()).eql(
+        expectedPathParam.value.toString()
+      );
       expect(result.regex?.source).to.equal(
-        escapeRegExp("/" + segments[0] + "/") + `(?<${segments[1].paramName}>[^\\\/]+?)`
+        escapeRegExp("/" + segments[0] + "/") +
+          `(?<${segments[1].paramName}>[^\\\/]+?)`
+      );
+    });
+
+    it("Parameter path /test/[eventId]/generate/[eventId]", () => {
+      const segments = [
+        "test",
+        {
+          type: "parameter",
+          paramName: "eventId",
+          parser: (str) => str,
+          toString: (value) => escapeRegExp(value),
+        },
+        "generate",
+        {
+          type: "parameter",
+          paramName: "eventId",
+          parser: (str) => str,
+          toString: (value) => escapeRegExp(value),
+        },
+      ];
+      const result = createPath(...segments);
+      const expectedPathParam = {
+        type: segments[1].type,
+        paramName: segments[1].paramName,
+        value: createPathParamValueFunction(
+          segments[1].paramName,
+          segments[1].parser
+        ),
+      };
+      expect(result.segments).eql([...segments]);
+      expect(result.parameters[segments[1].paramName].value.toString()).eql(
+        expectedPathParam.value.toString()
+      );
+      expect(result.regex?.source).to.equal(
+        escapeRegExp("/" + segments[0] + "/") +
+          `(?<${segments[1].paramName}>[^\\\/]+?)` + 
+          escapeRegExp("/" + segments[2]) + `\\/\\k<${result.segments[3].paramName}>`
       );
     });
   });
