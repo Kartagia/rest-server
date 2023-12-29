@@ -50,7 +50,6 @@ describe("escapeLiteral", () => {
  * @param {import("../src/path.mjs").ServicePath} tested The tested segment path.
  * @param {SegmentPathTestData<any>[]} [validPaths] The valid paths.
  * @param {SegmentPathTestData<any>[]} [invalidPaths] The invalid paths.
- * @param {boolean} [testCase=false] Does the test create describe and it.
  * @returns {Promise<boolean>} True, if the test passes. False, if the test is
  * skipped. Rejection with error if test fails.
  * @throws {import("chai").AssertionError} The exception of the rejection, if test fails.
@@ -64,87 +63,49 @@ function testSegmentPath(
   return new Promise((resolve, reject) => {
     expect(tested).to.instanceOf(Object);
     try {
-      if (testCase) {
-        describe("Valid segment paths", () => {
-          validPaths.forEach(({ path, params }, index) => {
-            expect(params).instanceOf(
-              Object,
-              `Invalid valid test data at index ${index}`
-            );
-            it(`Test #${index}: ${path}`, () => {
-              let match;
-              const regexp = new RegExp(
-                tested.regex.source,
-                tested.regex.flags
-              );
-              expect(() => {
-                match = regexp.exec(path);
-              }).to.not.throw();
-              expect(match).not.null;
-              Object.getOwnPropertyNames(params).forEach((paramName) => {
-                expect(tested.parameters[paramName]).instanceOf(Object);
-                expect(tested.parameters[paramName].value(match)).to.equal(
-                  params[paramName]
-                );
-              });
-            });
-          });
-        });
-        describe("Invalid segment paths", () => {
-          if (params) {
-            throw AssertionError(
-              `Invalid test case at ${index} contains parameters`
-            );
-          }
-          it(`Test #${index}: ${path}`, () => {
-            let match;
-            const regexp = new RegExp(tested.regex.source, tested.regex.flags);
-            expect(() => {
-              match = regexp.exec(path);
-            }).to.not.throw();
-            expect(match).null;
-          });
-        });
-      } else {
-        validPaths.forEach(({ path, params }, index) => {
-          expect(params).instanceOf(
-            Object,
-            `Invalid valid test data at index ${index}`
+      validPaths.forEach(({ path, params }, index) => {
+        expect(params).instanceOf(
+          Object,
+          `Invalid valid test data at index ${index}`
+        );
+        let match;
+        const regexp = new RegExp(tested.regex.source, tested.regex.flags);
+        expect(() => {
+          match = regexp.exec(path);
+        }).to.not.throw();
+        expect(match).not.null;
+        Object.getOwnPropertyNames(params).forEach((paramName) => {
+          expect(tested.parameters[paramName]).instanceOf(Object);
+          expect(tested.parameters[paramName].value(match)).to.equal(
+            params[paramName]
           );
-          let match;
-          const regexp = new RegExp(tested.regex.source, tested.regex.flags);
-          expect(() => {
-            match = regexp.exec(path);
-          }).to.not.throw();
-          expect(match).not.null;
-          Object.getOwnPropertyNames(params).forEach((paramName) => {
-            expect(tested.parameters[paramName]).instanceOf(Object);
-            expect(tested.parameters[paramName].value(match)).to.equal(
-              params[paramName]
-            );
-          });
         });
+      });
 
-        invalidPaths.forEach(({ path, params }, index) => {
-          if (params) {
-            throw AssertionError(
-              `Invalid test case at ${index} contains parameters`
-            );
-          }
-          let match;
-          const regexp = new RegExp(tested.regex.source, tested.regex.flags);
-          expect(() => {
-            match = regexp.exec(path);
-          }).to.not.throw();
-          expect(match).null;
-        });
-      }
+      invalidPaths.forEach(({ path, params }, index) => {
+        if (params) {
+          throw new AssertionError(
+            `Invalid test case at ${index} contains parameters`
+          );
+        }
+        let match;
+        const regexp = new RegExp(tested.regex.source, tested.regex.flags);
+        expect(() => {
+          match = regexp.exec(path);
+        }).to.not.throw();
+        expect(match).null;
+      });
       resolve(true);
     } catch (error) {
       if (error instanceof AssertionError) {
         reject(error);
       } else if (error instanceof Error) {
-        reject(new AssertionError(`Test failed`, { cause: error }));
+        reject(
+          new AssertionError(
+            `Test failed. Error: ${error.name}. Reason: ${error.message}`,
+            { cause: error }
+          )
+        );
       } else {
         reject(new AssertionError(`Test failed. Reason: ${error}`));
       }
@@ -301,6 +262,62 @@ describe("Unit Test of Path", () => {
           ]
         )
       ).eventually.true;
+    });
+
+    it("Parameter path /test/[eventId]/description/[descId]", () => {
+      const segments = [
+        "test",
+        {
+          type: "parameter",
+          paramName: "eventId",
+          parser: (str) => str,
+          toString: (value) => encodeURIComponent(value),
+        },
+        "generate",
+        {
+          type: "parameter",
+          paramName: "descId",
+          parser: (str) => Number.parseInt(str),
+          toString: (value) => encodeURIComponent(value),
+        },
+      ];
+      const result = createPath(...segments);
+      const expectedPathParam = {
+        type: segments[1].type,
+        paramName: segments[1].paramName,
+        value: createPathParamValueFunction(
+          segments[1].paramName,
+          segments[1].parser
+        ),
+      };
+      expect(result.segments).eql([...segments]);
+      expect(result.parameters[segments[1].paramName].value.toString()).eql(
+        expectedPathParam.value.toString()
+      );
+      expect(result.regex?.source).to.equal(
+        escapeRegExp("/" + segments[0]) +
+          escapeRegExp("/") +
+          `(?<${segments[1].paramName}>[^\\\/]+?)` +
+          escapeRegExp("/" + segments[2]) +
+          escapeRegExp("/") +
+          `(?<${segments[3].paramName}>[^\\\/]+?)` +
+          "(?=\\/|$)"
+      );
+
+      const testPath = "/test/rest/generate/01";
+      const params = { eventId: "rest", descId: 1 };
+      let match;
+      expect(() => {
+        match = result.regex.exec(testPath);
+      }).not.throw();
+      expect(match).not.null;
+      expect(match.index).to.equal(0);
+      expect(match[0]).to.equal(testPath);
+      Object.getOwnPropertyNames(params).forEach((paramName) => {
+        expect(result.parameters[paramName].value(match)).to.equal(
+          params[paramName]
+        );
+      });
     });
   });
 });
