@@ -29,8 +29,9 @@ export function escapeRegExp(literal) {
  * @typedef {Object} ServicePath
  * @property {boolean} absolute Is the path absolute or relative.
  * @property {PathSegmentTypes[]} segments The segments of the path.
- * @property {Map<string, string>} parameters The mappign from segment
- * parameters to their values.
+ * @property {RegExp} regex The regular expression matching the service path.
+ * @property {Map<string, PathParameter>} parameters The mapping from segment
+ * parameters to their definitions.
  */
 
 /**
