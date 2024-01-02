@@ -1,11 +1,13 @@
-
 import { DataSource } from "../src/datasource.mjs";
+import { ValidationError } from "../src/errors.mjs";
+import { expect, should, use } from "chai";
+import chaiAsPromised from "chai-as-promised";
+use(chaiAsPromised);
 
 /**
  * @module test/junit/datasource
  * JUNIT-testi datasource luokan objektille.
  */
-
 
 /**
  * Logs the given values to the log.
@@ -41,7 +43,13 @@ import { DataSource } from "../src/datasource.mjs";
 /**
  * Starts the timer with given name.
  * @callback TimerStartFunction
- * @param {string} [timerName="default"] The timer name. 
+ * @param {string} [timerName="default"] The timer name.
+ */
+
+/**
+ * End the timer with given name.
+ * @callback TimerEndFunction
+ * @param {string} [timerName="default"] The timer name.
  */
 
 /**
@@ -53,13 +61,13 @@ import { DataSource } from "../src/datasource.mjs";
  * Logs the timer label and the timer current value followed by the parameters.
  * @callback TimerLogFunction
  * @param {string} [timerName="deault"] The timer name
- * @param {any[]} params... The logged data. 
+ * @param {any[]} params... The logged data.
  */
 
 /**
  * Logger of times.
  * @typedef {Object} TimeLogger
- * @property {TimerStartFunction} time Starts a timer. 
+ * @property {TimerStartFunction} time Starts a timer.
  * @property {TimerEndFunction} timeEnd Stops a timer.
  * @property {TimerLogFunction} timeLog Logs a timer current value.
  */
@@ -70,71 +78,213 @@ import { DataSource } from "../src/datasource.mjs";
 
 /**
  * Test create data source.
+ * @template [Key=string] The type of the data source values.
+ * @template [Value=string] The type of the data source values.
  * @param {Logger} [logger] The logger used to log the messages. Defaults
  * to console.log.
+ * @param {Partial<import("../src/datasource.mjs").IDataSource<Key, Value>>} [source] The
+ * tested data source.
+ * @param {Map<Key, Value>} [validResources] The valid test cases mapping from
+ * data source path to the data source value.
  */
-export function testCreateDataSource(logger=console.log) {
+export async function testCreateDataSource(
+  logger = console.log,
+  source = {},
+  validResources = []
+) {
   try {
-    const tested = new DataSource();
-  } catch(error) {
-    throw Error("Test failed on DataSource", {cause: error});
+    const tested = new DataSource(source);
+    [...validResources.keys()].forEach((resourceId) => {
+      tested
+        .retrieve(resourceId)
+        .then((value) => {
+          const comparee = validResources.get(resourceId);
+          if (typeof comparee !== typeof value) {
+            throw new ValidationError(
+              `Invalid resource type: expected ${typeof comparee}, got ${typeof value}`,
+              { target: resourceId }
+            );
+          }
+          switch (typeof value) {
+            case "object":
+              if (value instanceof Object.getPrototypeOf(comparee)) {
+                // Check more accurate content.
+                expect(value).include(comparee, "Invalid resource value");
+              } else {
+                // The test fails.
+                throw new ValidationError(
+                  `Invalid resource class: expected ${Object.getPrototypeOf(
+                    comparee
+                  )}, got ${Object.getPrototypeOf(value)}`,
+                  { target: resourceId }
+                );
+              }
+              break;
+            case "number":
+              if (Number.isNaN(comparee)) {
+                if (Number.isNaN(value)) {
+                  return true;
+                } else {
+                  throw new ValidationError(
+                    `Invalid resource value: expected NaN, got ${value}`,
+                    { target: resourceId }
+                  );
+                }
+              } else if (comparee !== value) {
+                throw new ValidationError(
+                  `Invalid resource value: expected ${comparee}, got ${value}`,
+                  { target: resourceId }
+                );
+              } else {
+                return true;
+              }
+            case "symbol":
+              if (comparee !== value) {
+                throw new ValidationError(
+                  `Invalid resource value: expected a different symbol`,
+                  { target: resourceId }
+                );
+              } else {
+                return true;
+              }
+            case "string":
+            case "boolean":
+            case "undefined":
+            case "null":
+            default:
+              if (comparee !== value) {
+                throw new ValidationError(
+                  `Invalid resource value: expected ${comparee}, got ${value}`,
+                  { target: resourceId }
+                );
+              } else {
+                return true;
+              }
+          }
+        })
+        .catch((error) => {
+          throw new ValidationError("Missing expected resource", {
+            target: resourceId,
+            cause: error,
+          });
+        });
+    });
+    logger.info(`Test passsed`);
+  } catch (error) {
+    logger.error(`Test failed: ${error}`);
+    throw Error("Test failed on DataSource", { cause: error });
   }
 }
-
 
 // Running the tests.
-/**
- * 
- * @param {Logger} [logger] The logger used to log the messages. Defaults
- * to console.log.
- */
-export default function runTests(logger=console.log, baseIndex=1) {
-  const results = {Failed: 0, Skipped: 0, Passed: 0}
-  [["createDataSource", testCreateDataSource]].forEach( ([testName, testFunction], index) => {
-  try {
-    const testTitle = `Test #${baseIndex + index}: ${testName || ""}:`
-    logger.group(testTitle); 
-    if (testFunction(logger)) {
-      logger.log("Test succeeded");
-      results.Passed++;
-    } else {
-      logger.log("Test skipped");
-      results.Skipped++;
+describe("DataSources", () => {
+  it("Default data source", () => {
+    /**
+     * @type {DataSource<string, string>}
+     */
+    let tested;
+    expect(() => {
+      tested = new DataSource();
+    }).throw(TypeError);
+  });
+
+  const generateKeySequence = (first = 1, last = 100, timeOut = 50) => {
+    const result = [];
+    let goOn = true;
+    const timeout = setTimeout(() => {
+      goOn = false;
+    }, timeOut);
+    for (let i = first; i < last && goOn; i++) {
+      result.push(i);
     }
-  } catch(error) {
-    logger.error(`Test Failed: ${error.name || "Error"}: ${error.message}`);
-    results.Failed++;
-  }
-  logger.groupEnd();
+    clearTimeout(timeout);
+    return result;
+  };
+
+  const keys = generateKeySequence(1, 1000, 50);
+
+  const validDataSourceConstructions = [
+    [
+      {
+        retrieve: (id) =>
+          Number.isInteger(id) ? Promise.retrieve(id) : Promise.reject(),
+        keys: () => {
+          return Promise.resolve(keys);
+        },
+      },
+      [["retrieveAll", [], keys]],
+      "Readonly numbers from 1 to 1000"
+    ],
+    [
+      {
+        entries: new Map(
+          ["Battle", "Discipline"].map((skillName) => [
+            skillName,
+            { skillName },
+          ])
+        ),
+        retrieve: (id) => new Promise((resolve, reject) => {}),
+        keys: () =>
+          new Promise((resolve, _reject) => {
+            resolve([...this.entries.keys()]);
+          }),
+        create: (skill) => {
+          return new Promise((resolve, reject) => {
+            if (
+              skill instanceof Object &&
+              "skillName" in skill &&
+              typeof skillName === "string"
+            ) {
+              if (this.entries.has(skill.skillName)) {
+                reject(
+                  new TypeError(`Duplciate skill name ${skill.skillName}`)
+                );
+              } else {
+                this.entries.set(skill.skillName, skill);
+                resolve(skill.skillName);
+              }
+            } else {
+              reject(new TypeError(`Invalid skill name`));
+            }
+          });
+        },
+        update: (id, value) => {
+          return new Promise( (resolve, _reject) => {
+            if (this.entries.has(id)) {
+              this.entries.set(id, value);
+              resolve(true);
+            } else {
+              resolve(false);
+            }
+          })
+        }
+      },
+      [
+        ["create", [{ skillName: "Communication" }], true],
+        ["keys", [], ["Battle", "Discipline", "Communication"]],
+        ["update", ["Communication", {skillName: "Move"}], true],
+        ["keys", [], ["Battle", "Discipline", "Move"]],
+        ["keyOfValue", [{skillName: "Move"}], "Move"]
+      ],
+      "Dune Skills container with create and update"
+    ],
+  ];
+  validDataSourceConstructions.forEach(
+    ([tested, validOperations = [], testName = null], index) => {
+      it(`Testing ${testName || `Test #${index}`}`, async () => {
+        let result;
+        expect(() => (result = new DataSource(tested))).to.not.throw();
+        expect(result.keys()).eventually.not.empty;
+        expect(
+          result.keys().then((keys) => {
+            return Promise.all(keys.map((key) => result.retieve(key)));
+          })
+        ).eventually.fulfilled;
+
+        validOperations.forEach(([operation, params, expected]) => {
+          expect(result[operation](...params)).eventually.equal(expected);
+        });
+      });
+    }
+  );
 });
-results.Total = results.Passed + results.Failed + results.Skipped;
-return results;
-}
-/**
- * Performs tests and prints summary.
- * @param {string} [testTitle] The title of the test.
- * @param {Logger} [logger] The logger used to log the messages. Defaults
- * to console.log.
- */
-export function testResults(testTitle="DataSource JUNIT Test", logger=console.log) {
-  const timerName = `${testTitle} elapsed time`
-  loggerGroup(testTitle)
-  if ("time" in logger) {
-    logger.time(timerName);
-  }
-  logger.group("Tests");
-  const results = runTests(logger);
-  if (results.Failed) {
-    logger.log(`Test failed (with ${results.Failed} failures, ${results.Skipped} skipped)`);
-  } else {
-    logger.log(`Test passed (with ${results.Skipped} skipped)`);
-  }
-  logger.groupEnd();
-  logger.group("Summary");
-  if ("timeEnd" in logger) {
-    logger.timeEnd(timerName);
-  }
-  logger.table(["Summary", results]);
-  logger.groupEnd();
-  logger.groupEnd();
-}
